@@ -9,9 +9,10 @@ foo = []
 
 
 # with open("input01.txt","r") as FILE:
-with open("data01_test.txt","r") as FILE:
+with open("input01_test.txt","r") as FILE:
     for line in FILE:
         # l = line.strip()
+        print(line)
         a,b = re.split(spaces_pattern,line.strip())
         heapq.heappush(list_1,int(a))
         heapq.heappush(list_2,int(b))
@@ -25,8 +26,8 @@ sorted_2 = [ heapq.heappop(list_2) for i in range(len(list_2))]
 print(sorted_1)
 
 # solution to part 
-# diffs = [ abs(a - b) for a,b in zip(sorted_1,sorted_2)]
-# print(sum(diffs))
+diffs = [ abs(a - b) for a,b in zip(sorted_1,sorted_2)]
+print(sum(diffs))
 
 # --------
 # PART 2

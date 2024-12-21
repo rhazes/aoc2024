@@ -11,6 +11,7 @@ NORTH = 0
 EAST =  1
 SOUTH = 2
 WEST =  3
+DIRS = ['north','east','south','west']
 
 class Player:
     headings = [NORTH,EAST,SOUTH,WEST]
@@ -57,25 +58,25 @@ def in_bounds(pos,dim):
    return within_height and within_width
 
 
-def ray_cast(start,dir,board):
-    """return the coords of the first hit obj"""
-    found = None
-    _pos = start
+# def ray_cast(start,dir,board):
+#     """return the coords of the first hit obj"""
+#     found = None
+#     _pos = start
 
-    def step_fn(coord): 
-        return coord[0] + dir[0], coord[1] + dir[1]
+#     def step_fn(coord): 
+#         return coord[0] + dir[0], coord[1] + dir[1]
 
-    # North find the next obstacle above in y
-    obstacles_north = by_col[_pos[0]]
+#     # North find the next obstacle above in y
+#     obstacles_north = by_col[_pos[0]]
 
-    # while found is None and in_bounds(_pos):
-        # pass
+#     # while found is None and in_bounds(_pos):
+#         # pass
         
-def get_obs_north(pos, col_objs):
-    objs_north = [obs for obs in col_objs[pos[0]] if obs[0] == pos[0]\
-]    
-    objs_north.sort(key = lambda x: x[1])
-    return objs_north
+# def get_obs_north(pos, col_objs):
+#     objs_north = [obs for obs in col_objs[pos[0]] if obs[0] == pos[0]\
+# ]    
+#     objs_north.sort(key = lambda x: x[1])
+#     return objs_north
 
 def find_closest_obj(dir):
     col,row = player.pos
@@ -173,14 +174,15 @@ def parse_input():
 
 by_row,by_col,objs,(board_width,board_height),player = parse_input()
 
-def add(a,b):
+def step(a,b):
     return (a[0]+b[0],a[1]+b[1])
 
 pos = player.pos
 visited = set()
 visited_map = {}
+patrol_turns = set()
 
-# visited.add((pos[0],pos[1]))
+# visited.step((pos[0],pos[1]))
 STEP = [(0,-1),(1,0),(0,1),(-1,0)]
 HEADING = [NORTH,EAST,SOUTH,WEST]
 heading_idx = 0
@@ -192,19 +194,21 @@ def walk_to_exit(pos):
         return "exit"
     else:
         #if next step in direction is an obstacle turn
-        col,row = add(pos,STEP[heading_idx])
+        col,row = step(pos,STEP[heading_idx])
         if row < 0 or row >= board_height:
             return "exit"  
         elif col in by_row[row]:
-            print("turning...")
+            # print("turning...")
             heading_idx = (heading_idx + 1) % 4
+            # store the turn
+            patrol_turns.add(pos)
             return pos
         else:
-            print("\tstepping...")
-            col,row = add(STEP[heading_idx],pos)
+            # print("\tstepping...")
+            col,row = step(STEP[heading_idx],pos)
             visited.add((col,row))
             if not row in visited_map:
-                print("creating visited map")
+                # print("creating visited map")
                 visited_map[row] = {}
                 visited_map[row][col] = None
 
@@ -216,28 +220,329 @@ def walk_to_exit(pos):
             else:
                 curr_dir_symbol = '-'
 
-            # print(f"keys:{visited_map.keys()}, trying key:{pos[1]} ...f{visited_map[pos[1]].keys()}")
-            print(f"pos1:{row} pos0:{col}")
+            # print(f"pos1:{row} pos0:{col}")
             last_dir_symbol =  visited_map[row][col]
-            if last_dir_symbol:
+            if last_dir_symbol: # update to a corner location
                 if last_dir_symbol != '+':
                     if last_dir_symbol != curr_dir_symbol:
                         visited_map[row][col] = '+'
             else:
                 visited_map[row][col] = curr_dir_symbol
 
+            #### 
+            # check this step to see if there is an already 
+            # traversed path to the right # that leads to an obstacle
+            obj_to_right = None
+            closest = None
+            if heading_idx == NORTH:
+                # find obj with higher col
+                if not by_row[row] == []:
+                    obj_to_right = [ obj_col for obj_col in by_row[row] if obj_col > col ]
+                    if obj_to_right != []: 
+                        obj_to_right.sort()
+                        closest = (obj_to_right[0],row)
+                        print(f"found an obj to the east of pos {col},{row} {closest}")
+
+            if heading_idx == SOUTH:
+                # find obj with higher col
+                if not by_row[row] == []:
+                    obj_to_right = [ obj_col for obj_col in by_row[row] if obj_col < col ]
+                    if obj_to_right != []:
+                        obj_to_right.sort()
+                        closest = (obj_to_right[0],row)
+                        print(f"found an obj to the west of pos {col},{row} {closest}")
+
+            if not closest is None:
+                path = get_path_in_dir((col,row),closest)
+                if path is None:
+                    print(f"weird that we have a closest and path is none: closest: {closest} to pos: {(col,row)}")
+                print(f"path to closest { closest} is {path}...",end=' ')
+                all_seen = all( [ coord in visited for coord in path])
+                print(f"has been traversed = {all_seen}")
+
         return (col,row)
 
-n = 8000
-next_pos = None
-while n > 0 and next_pos != "exit":
-    next_pos = walk_to_exit(pos)
-    if next_pos == "exit":
-        break
-    visited.add(next_pos)
-    pos = next_pos
-    n -= 1
-if n == 0:
-    print("!!!the loop bottomed out before completing!!!")
-#5243 is too high by 1 ??? Fixed
-print(f"ans={len(visited)}")
+def draw_map():
+    for row in range(board_height):
+        for col in range(board_width):
+            if (col,row) in objs:
+                print("#",end=' ')
+                continue
+            if not row in visited_map:
+                print(".",end=' ')
+                continue
+            if not col in visited_map[row]:
+                print(".",end=' ')
+                continue
+            print(visited_map[row][col],end=' ')
+        print()
+
+def prob1():
+    n = 8000
+    next_pos = None
+    pos = player.pos
+    while n > 0 and next_pos != "exit":
+        next_pos = walk_to_exit(pos)
+        if next_pos == "exit":
+            break
+        visited.add(next_pos)
+        pos = next_pos
+        n -= 1
+    if n == 0:
+        print("!!!the loop bottomed out before completing!!!")
+    #5243 is too high by 1 ??? Fixed
+    print(f"ans={len(visited)}")
+
+# def east_candidates(pos):
+#     col = pos[0] + 1
+#     row = pos[1] + 1
+
+#     if col < 0 or col >= board_width:
+#         return []
+
+#     if row < 0 or row >= board_height:
+#         return []
+
+#     candidates = [ (c,row) for c in by_row[row] if c > col]
+
+def get_candidates(dir,pos):
+    col = pos[0]
+    row = pos[1]
+    candidates = None
+    candidate = None
+
+    def valid_coord(c,r):
+        if c < 0 or c >= board_width:
+            return False 
+        elif r < 0 or r >= board_height:
+            return False
+        return True
+
+    match dir:
+        case 0: #NORTH
+            col += 1
+            row -= 1
+            if valid_coord(col,row):
+                candidates = [ (col,r) for r in by_col[col] if r < row ]
+        case 1: #EAST
+            col += 1
+            row += 1
+            if valid_coord(col,row):
+                candidates = [ (c,row) for c in by_row[row] if c > col]
+        case 2: #SOUTH
+            col -= 1
+            row += 1
+            if valid_coord(col,row):
+                candidates = [ (col,r) for r in by_col[col] if r > row ]
+        case 3: #WEST
+            col -= 1
+            row -= 1
+            if valid_coord(col,row):
+                candidates = [ (c,row) for c in by_row[row] if c < col]
+
+    if candidates in [[],None]:
+        candidates = None
+    else:
+    # if not candidates is None:
+        candidates.sort(key= lambda coord: manhattan(pos,coord))
+        candidate = candidates[0]
+
+    return candidate #candidates
+
+# def west_candidates(pos):
+#     col = pos[0] - 1
+#     row = pos[1] - 1 
+#     if col < 0 or col >= board_width:
+#         return []
+
+#     if row < 0 or row >= board_height:
+#         return []
+
+#     candidates = [ (c,row) for c in by_row[row] if c < col]
+    
+#     if len(candidates) == 0:
+#         return None
+
+#     if len(candidates) == 1:
+#         return candidates[0]
+
+#     closest = candidates[0]
+#     min_dist = manhattan(closest, pos)
+#     for coord in candidates:
+#         d = manhattan(coord,pos)
+#         if d < min_dist:
+#             closest = coord
+#             min_dist = d 
+
+def manhattan(a,b):
+    return abs(a[0]-b[0]) + abs(a[1] - b[1])
+
+# def north_candidates(pos):
+#     col = pos[0] + 1 
+#     row = pos[1] - 1
+#     if col < 0 or col >= board_width:
+#         return []
+
+#     if row < 0 or row >= board_height:
+#         return []
+
+#     candidates = [ (col,r) for r in by_col[col] if r < row ]
+
+# def south_candidates(pos):
+#     col = pos[0] - 1
+#     row = pos[1] + 1
+
+#     if col < 0 or col >= board_width:
+#         return []
+
+#     if row < 0 or row >= board_height:
+#         return []
+
+#     candidates = [ (col,r) for r in by_col[col] if r > row ]
+
+def get_loop_candidates(pos):
+    # ret = {}
+    ret = { dir:get_candidates(idx,pos) for idx,dir in enumerate(DIRS)}
+    return ret
+
+def flatten_candidates(candidates):
+    return [ coord for coords in candidates if not coords is None for coord in coords]
+
+def build_loop(dirs,obj_pos):
+    """helper function to get the number of non-None entries in loop candidates"""
+    if len(dirs) == 0:
+        return []
+    
+    direction = dirs[0]
+    # candidates = get_candidates(direction,obj_pos)
+    candidate = get_candidates(direction,obj_pos)
+    # print(candidate)
+    if not candidate is None:
+        return [obj_pos] + build_loop(dirs[1:], candidate)
+    # if not candidates is None:
+        candidate = candidates[0]
+        # return [obj_pos] + build_loop(dirs[1:], candidate)
+    else:
+        return []
+
+def check_loops(obj_pos):
+    cycles = [[0,1,2,3],
+              [1,2,3,0],
+              [2,3,0,1],
+              [3,0,1,2]]
+
+    return [ build_loop(cycle,obj_pos) for cycle in cycles]
+
+def get_empty_cells():
+    prob1()
+    empties = [ (col,row) for row in range(board_height) for col in range(\
+                    board_width) if col not in by_row[row]]  
+    empty_loops = { coord:get_loop_candidates(coord) for coord in \
+                    empties}
+
+def is_loop_closed(loop):
+    objs_for_last_elem_in_loop = get_loop_candidates(loop[-1])
+    lst = list(objs_for_last_elem_in_loop.values())
+
+    # filter out blank ones
+    lst = [l for l in lst if not l is None]
+
+    #True if the first elem of the loop is also connected
+    # to the last_elem in the loop
+    return loop[0] in lst
+
+def get_turn_dir(coord1,coord2):
+    c1,r1 = coord1
+    c2,r2 = coord2
+    delta_col = c2 - c1
+    delta_row = r2 - r1
+    if abs(delta_col) == 1:
+        # has to be north south
+        if delta_row > 0:
+            return SOUTH
+        else:
+            return NORTH
+    if abs(delta_row) == 1:
+        # has to be east/west
+        if delta_col > 0:
+            return EAST
+        else:
+            return WEST
+
+def get_dir_to_close_loop(loop):
+    first_dir = get_turn_dir(loop[0],loop[1])
+    last_dir = (first_dir - 1) % 4
+    return last_dir
+
+def flip_dir(dir):
+    return (dir + 2) % 4
+
+def get_points_til_cross(start,end,dir):
+    pass
+
+def is_subset(a,b):
+    intersection = a.intersection(b)
+    return len(intersection) == len(a)
+
+def get_points_to_close_loop(loop):
+    c1,c2,c3,c4 = loop
+    dir_to_home = get_dir_to_close_loop(loop)
+    coords = set()
+    if dir_to_home == NORTH:
+        # go south til you get to c4_row
+        coords = set([ (c1[0],r) for r in range(c1[1],c4[1]+1) ])
+    elif dir_to_home == SOUTH:
+        # go north til you get to c4
+        coords = set([ (c1[0],r) for r in range(c1[1], c4[1]-1) ])
+    elif dir_to_home == EAST:
+        # go west til you get to c4
+        coords = set([ (c,c1[1]) for c in range(c1[0],c4[0]-1) ])
+    elif dir_to_home == WEST:
+        # go east til you get to c4
+        coords = set([ (c,c1[1]) for c in range(c1[0], c4[0]+1) ])
+    else:
+        print(f"ERROR unknown direction: {dir_to_home}")
+    return coords
+
+def get_path_in_dir(coord1,coord2):
+    c1,r1 = coord1
+    c2,r2 = coord2
+    delta_col = c2 - c1
+    delta_row = r2 - r1
+
+    col_step = 1 if delta_col > 0 else -1
+    row_step = 1 if delta_row > 0 else -1
+
+    print(f"from {c1} to {c2}",end = ' ')
+    print(f"from {r1} to {r2}")
+    points = None
+
+    if abs(delta_col) > 1:
+        row = r1 + delta_row # going east
+        points = [ (c,row) for c in range(c1,c2,col_step)]
+    elif abs(delta_row) > 1:
+        col = c1 + delta_col # going east
+        points = [ (col,r) for r in range(r1,r2,row_step)]
+    else:
+        print(f"ERROR bad points: {coord1} and {coord2}")
+    return points
+
+
+
+# Part 2 Script
+def prob2():
+    prob1()
+    maybes = [check_loops(o) for o in objs]
+    loop_4 = [f for fs in maybes for f in fs if len(f) == 4 ]
+    not_closed = [l for l in loop_4 if not is_loop_closed(l) ] 
+
+    potential_paths = [get_points_to_close_loop(l) for l in not_closed]
+    validate_paths = [is_subset(path,visited) for path in potential_paths] 
+    validate_paths = [p for p in validate_paths if p ]
+    print(f"count of valid obstacles that interrupt existing\
+         closed loop: {len(validate_paths)}") # 923
+
+    loop_3 = [f for fs in maybes for f in fs if len(f) == 3 ]
+    
+
+    return (loop_3,not_closed)
